@@ -109,7 +109,7 @@ let
             mkdir -p "$JUPYTER_CONFIG_DIR"
             mkdir -p "$JUPYTER_DATA_DIR"
             mkdir -p "$JUPYTER_RUNTIME_DIR"
-            mkdir -p "$JUPYTERLAB_DIR"
+            mkdir -p "$JUPYTERLAB_DIR"/extensions
           fi
 
           for pname in $(echo "${toString serverextensionPNames}"); do
