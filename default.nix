@@ -2,12 +2,14 @@
 , config ? {}
 , pkgs ? import ./nix { inherit config overlays; }
 , directory ? null
-, serverextensions ? []
+, serverextensions ? (_:[])
 }:
 
 with (import ./lib/directory.nix { inherit pkgs; });
 with (import ./lib/docker.nix { inherit pkgs; });
+with builtins;
 with pkgs.lib;
+with pkgs.lib.strings;
 
 let
   # Kernel generators.
@@ -28,6 +30,8 @@ let
 
   myDirectory = (getDirectory { directory = directory; });
 
+  serverextensionsPackages = (serverextensions python3);
+
   # JupyterLab with the appropriate kernel and directory setup.
   jupyterlabWith = {
     directory ? myDirectory,
@@ -42,10 +46,7 @@ let
         python3.jupyter_nbextensions_configurator
         python3.tornado
       ] ++
-      # TODO: I seem to need to use this for now:
-      (attrsets.attrVals serverextensions python3)
-      # but wouldn't the following the preferable?
-      #serverextensions
+      serverextensionsPackages
       );
 
       # JupyterLab executable wrapped with suitable environment variables.
@@ -61,6 +62,14 @@ let
             "--set PYTHONPATH ${pythonPath}"
           ];
         })
+      );
+
+      serverextensionPNames = (
+        map (p: escapeNixString (attrsets.getAttrFromPath ["pname"] p)) serverextensionsPackages
+      );
+
+      serverextensionOutPaths = (
+        map (p: escapeNixString (attrsets.getAttrFromPath ["outPath"] p)) serverextensionsPackages
       );
 
       # Shell with the appropriate JupyterLab, launching it at startup.
@@ -102,6 +111,18 @@ let
             mkdir -p "$JUPYTER_RUNTIME_DIR"
             mkdir -p "$JUPYTERLAB_DIR"
           fi
+
+          for pname in $(echo "${toString serverextensionPNames}"); do
+            jupyter serverextension enable --py "$pname"
+          done
+
+          for f in $(echo "${toString serverextensionOutPaths}"); do
+            if [ -d "$f"/share/jupyter/lab/extensions ]; then
+              cp "$f"/share/jupyter/lab/extensions/*.tgz "$JUPYTERLAB_DIR"/extensions/
+            fi
+          done
+
+          jupyter lab build --app-dir="$JUPYTERLAB_DIR" > /dev/null
         '';
       };
     in
