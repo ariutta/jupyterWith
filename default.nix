@@ -2,6 +2,7 @@
 , config ? {}
 , pkgs ? import ./nix { inherit config overlays; }
 , directory ? null
+, labextensions ? []
 , serverextensions ? (_:[])
 }:
 
@@ -113,7 +114,7 @@ let
           fi
 
           for pname in $(echo "${toString serverextensionPNames}"); do
-            jupyter serverextension enable --py "$pname"
+            jupyter serverextension enable "$pname"
           done
 
           for f in $(echo "${toString serverextensionOutPaths}"); do
@@ -122,8 +123,9 @@ let
             fi
           done
 
-          # TODO: accept any jupyter lab extensions, not just this hard-coded one
-          jupyter labextension install jupyterlab_vim --app-dir="$JUPYTERLAB_DIR" --no-build > /dev/null
+          for labextension in $(echo "${toString labextensions}"); do
+            jupyter labextension install "$labextension" --app-dir="$JUPYTERLAB_DIR" --no-build > /dev/null
+          done
 
           chmod -R +w "$JUPYTERLAB_DIR"
 
