@@ -122,7 +122,20 @@ let
             fi
           done
 
+          # TODO: accept any jupyter lab extensions, not just this hard-coded one
+          jupyter labextension install jupyterlab_vim --app-dir="$JUPYTERLAB_DIR" --no-build > /dev/null
+
+          chmod -R +w "$JUPYTERLAB_DIR"
+
           jupyter lab build --app-dir="$JUPYTERLAB_DIR" > /dev/null
+
+          chmod -R +w "$JUPYTERLAB_DIR"
+
+          # TODO: why do I need to build twice for this to work?
+          jupyter lab build --app-dir="$JUPYTERLAB_DIR" > /dev/null
+
+          chmod -R +w "$JUPYTERLAB_DIR"/staging
+          rm -rf "$JUPYTERLAB_DIR"/staging
         '';
       };
     in
