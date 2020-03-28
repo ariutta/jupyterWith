@@ -113,6 +113,13 @@ let
             mkdir -p "$JUPYTERLAB_DIR"/extensions
           fi
 
+          # without setting notebook_dir, this command run from $HOME:
+          #   direnv exec ~/Documents/myenv jupyter lab start
+          # will result in notebook_dir being $HOME, not ~/Documents/myenv
+          if [ ! -f "$JUPYTER_CONFIG_DIR/jupyter_notebook_config.json" ]; then
+            echo '{"NotebookApp": {"notebook_dir": "${myDirectory}"}}' >"$JUPYTER_CONFIG_DIR/jupyter_notebook_config.json"
+          fi
+
           for pname in $(echo "${toString serverextensionPNames}"); do
             jupyter serverextension enable "$pname"
           done
