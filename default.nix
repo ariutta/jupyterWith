@@ -1,7 +1,7 @@
-{ overlays ? []
+{ directory # corresponds to notebook_dir (impure)
+, overlays ? []
 , config ? {}
 , pkgs ? import ./nix { inherit config overlays; }
-, directory ? null
 , labextensions ? []
 , serverextensions ? (_:[])
 }:
@@ -21,21 +21,19 @@ let
   python3 = pkgs.python3Packages;
 
   # Default configuration.
-  defaultDirectory = "${python3.jupyterlab}/share/jupyter/lab";
   defaultKernels = [ (kernels.iPythonWith {}) ];
   defaultExtraPackages = p: [];
 
-  getDirectory = {
-    directory ? "${defaultDirectory}"
-  }: directory;
+  shareDirectoryPure = "${python3.jupyterlab}/share/jupyter";
 
-  myDirectory = (getDirectory { directory = directory; });
+  notebookDirectoryImpure = directory;
+  shareDirectoryImpure = "${directory}/share-jupyter";
 
   serverextensionsPackages = (serverextensions python3);
 
   # JupyterLab with the appropriate kernel and directory setup.
   jupyterlabWith = {
-    directory ? myDirectory,
+    directory ? shareDirectoryPure,
     kernels ? defaultKernels,
     extraPackages ? defaultExtraPackages
     }:
@@ -55,12 +53,12 @@ let
         python3.jupyterlab.overridePythonAttrs (oldAttrs: {
           makeWrapperArgs = [
             # TODO: not sure whether these are all needed
-            "--set JUPYTER_CONFIG_DIR ${myDirectory}/config"
-            "--set JUPYTER_DATA_DIR ${myDirectory}/data"
-            "--set JUPYTER_RUNTIME_DIR ${myDirectory}/runtime"
-            "--set JUPYTERLAB_DIR ${myDirectory}/lab"
-            "--set JUPYTER_PATH ${kernelsString kernels}"
-            "--set PYTHONPATH ${pythonPath}"
+            "--set JUPYTER_CONFIG_DIR \"${shareDirectoryImpure}/config\""
+            "--set JUPYTER_DATA_DIR \"${shareDirectoryImpure}/data\""
+            "--set JUPYTER_RUNTIME_DIR \"${shareDirectoryImpure}/runtime\""
+            "--set JUPYTERLAB_DIR \"${shareDirectoryImpure}/lab\""
+            "--set JUPYTER_PATH \"${kernelsString kernels}\""
+            "--set PYTHONPATH \"${pythonPath}\""
           ];
         })
       );
@@ -99,25 +97,28 @@ let
             fi
           fi
 
-          export JUPYTER_PATH=${kernelsString kernels}
-          export JUPYTER_CONFIG_DIR=${myDirectory}/config
-          export JUPYTER_DATA_DIR=${myDirectory}/data
-          export JUPYTER_RUNTIME_DIR=${myDirectory}/runtime
-          export JUPYTERLAB_DIR=${myDirectory}/lab
-          export JUPYTERLAB=${jupyterlab}
+          export JUPYTER_PATH="${kernelsString kernels}"
+          export JUPYTER_CONFIG_DIR="${shareDirectoryImpure}/config"
+          export JUPYTER_DATA_DIR="${shareDirectoryImpure}/data"
+          export JUPYTER_RUNTIME_DIR="${shareDirectoryImpure}/runtime"
+          export JUPYTERLAB_DIR="${shareDirectoryImpure}/lab"
+          export JUPYTERLAB="${jupyterlab}"
 
-          if [ ! -d "${myDirectory}" ]; then
+          if [ ! -d "${shareDirectoryImpure}" ]; then
             mkdir -p "$JUPYTER_CONFIG_DIR"
             mkdir -p "$JUPYTER_DATA_DIR"
             mkdir -p "$JUPYTER_RUNTIME_DIR"
             mkdir -p "$JUPYTERLAB_DIR"/extensions
-          fi
 
-          # without setting notebook_dir, this command run from $HOME:
-          #   direnv exec ~/Documents/myenv jupyter lab start
-          # will result in notebook_dir being $HOME, not ~/Documents/myenv
-          if [ ! -f "$JUPYTER_CONFIG_DIR/jupyter_notebook_config.json" ]; then
-            echo '{"NotebookApp": {"notebook_dir": "${myDirectory}"}}' >"$JUPYTER_CONFIG_DIR/jupyter_notebook_config.json"
+            # We need to set notebook_dir in config so that this command:
+            #   direnv exec ~/Documents/myenv jupyter lab start
+            # always results in notebook_dir being ~/Documents/myenv.
+            # If we don't, then running that command from $HOME makes notebook_dir be $HOME.
+            if [ -f "$JUPYTER_CONFIG_DIR/jupyter_notebook_config.json" ]; then
+              echo "File already exists: $JUPYTER_CONFIG_DIR/jupyter_notebook_config.json" >/dev/stderr
+              exit 1
+            fi
+            echo '{"NotebookApp": {"notebook_dir": "${notebookDirectoryImpure}"}}' >"$JUPYTER_CONFIG_DIR/jupyter_notebook_config.json"
           fi
 
           for pname in $(echo "${toString serverextensionPNames}"); do
